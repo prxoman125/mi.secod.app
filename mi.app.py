@@ -3,43 +3,38 @@ import streamlit as st
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(
-    page_title="Control de Cobranza - Crece & Credick", 
+    page_title="Control de Cobranza - Crece & CrediK", 
     layout="wide",
     initial_sidebar_state="collapsed"
 )
 
-# --- ESTILOS CSS PERSONALIZADOS (LOGO, MODO OSCURO Y TAMAÑO DE IMÁGENES) ---
+# --- URL DEL LOGO OFICIAL CRECE & CREDIK ---
+URL_LOGO_CRECE_CREDIK = "https://i.ibb.co/2vBvRkS/image-6d7741.png"
+
+# --- ESTILOS CSS PERSONALIZADOS (MODO CLARO Y OSCURO) ---
 st.markdown("""
     <style>
     .stApp {
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
     
-    /* Encabezado con Logo */
+    /* Encabezado con Logo Oficial */
     .brand-container {
         display: flex;
         align-items: center;
-        gap: 15px;
-        margin-bottom: 15px;
+        gap: 20px;
+        margin-bottom: 20px;
     }
-    .brand-logo {
-        width: 50px;
-        height: 50px;
-        background: linear-gradient(135deg, #1E3A8A 0%, #3B82F6 100%);
-        border-radius: 10px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-        font-size: 24px;
-        font-weight: 900;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+    .brand-logo-img {
+        max-height: 85px;
+        width: auto;
+        object-fit: contain;
     }
     .header-title {
         font-size: 2.2rem;
         font-weight: 800;
         margin: 0;
-        line-height: 1;
+        line-height: 1.1;
     }
     .header-subtitle {
         opacity: 0.8;
@@ -47,29 +42,21 @@ st.markdown("""
         margin: 4px 0 0 0;
     }
 
-    /* Reducción global del tamaño de avatares en tablas */
-    [data-testid="stTable"] img, [data-testid="stDataEditor"] img, .stDataFrame img {
-        max-height: 32px !important;
-        width: auto !important;
-        border-radius: 50%;
-        object-fit: cover;
-    }
-
-    /* Tarjetas de Métricas */
+    /* Tarjetas de Métricas estilizadas */
     div[data-testid="stMetric"] {
         background-color: rgba(255, 255, 255, 0.05);
         border: 1px solid rgba(128, 128, 128, 0.2);
         border-radius: 8px;
         padding: 12px 16px;
-        border-left: 4px solid #1E3A8A;
+        border-left: 5px solid #00A887;
     }
 
-    /* Credencial INE México estilo compacto */
+    /* Credencial INE México estilo limpio */
     .ine-card {
         width: 250px;
         height: 145px;
         border: 1px solid rgba(128, 128, 128, 0.4);
-        background: rgba(128, 128, 128, 0.1);
+        background: rgba(128, 128, 128, 0.08);
         border-radius: 8px;
         padding: 8px;
         font-family: Arial, sans-serif;
@@ -196,62 +183,76 @@ if "df_clientes" not in st.session_state:
         },
     ])
 
-# --- ENCABEZADO Y LOGO CORPORATIVO CRECE & CREDIK ---
-st.markdown("""
+# --- ENCABEZADO CON LOGO OFICIAL ---
+st.markdown(f"""
     <div class="brand-container">
-        <div class="brand-logo">C&C</div>
+        <img src="{URL_LOGO_CRECE_CREDIK}" class="brand-logo-img" alt="Crece & CrediK Logo">
         <div>
-            <h1 class="header-title">Crece & Credick</h1>
-            <p class="header-subtitle">Sistema de Gestión de Crédito y Control de Cobranza - León, Guanajuato</p>
+            <h1 class="header-title">Crece & CrediK</h1>
+            <p class="header-subtitle">Sistema Simplificado de Control de Cobranza y Crédito - León, Guanajuato</p>
         </div>
     </div>
 """, unsafe_allow_html=True)
 
-# --- CONTROLES EMPRESARIALES (OPERATIVO CRECE & CREDICK) ---
-with st.expander("Panel de Control Operativo - Crece & Credick", expanded=True):
+# --- CONTROLES OPERATIVOS ---
+with st.expander("Filtros y Calculadora de Préstamos", expanded=True):
     col_ctrl1, col_ctrl2, col_ctrl3 = st.columns(3)
     
     with col_ctrl1:
         cobrador_seleccionado = st.selectbox(
-            "Cobrador / Ruta Asignada:",
-            ["Ruta 1 - Zona Centro", "Ruta 2 - León Moderno", "Ruta 3 - San Miguel", "Todas las Rutas"]
+            "Seleccionar Ruta / Cobrador:",
+            ["Todas las Rutas", "Ruta 1 - Zona Centro", "Ruta 2 - León Moderno", "Ruta 3 - San Miguel"]
         )
     
     with col_ctrl2:
-        filtro_buscar = st.text_input("Buscar Cliente:", placeholder="Escriba el nombre...")
+        filtro_buscar = st.text_input("Buscar Cliente por Nombre:", placeholder="Escriba aquí para buscar...")
         
     with col_ctrl3:
-        st.write("Calculadora Rápida de Crédito:")
-        monto_sim = st.number_input("Monto a Simular ($):", value=1000.0, step=500.0)
+        st.write("Calculadora Rápida:")
+        monto_sim = st.number_input("Monto a Calcular ($):", value=1000.0, step=500.0)
         pago_semanal_sim = (monto_sim * FACTOR_INTERES) / SEMANAS_TOTALES
-        st.caption(f"Pago semanal calculado: **${pago_semanal_sim:,.2f}** a {SEMANAS_TOTALES} semanas.")
+        st.caption(f"Pago semanal: **${pago_semanal_sim:,.2f}** a {SEMANAS_TOTALES} semanas.")
 
 # --- PESTAÑAS PRINCIPALES ---
 tab_captura, tab_resumen, tab_fichas = st.tabs(["Captura y Pagos", "Resumen de Saldos", "Fichas e INE"])
 
 with tab_captura:
-    st.subheader("Control de Clientes y Pagos Semanales")
+    st.subheader("Captura de Clientes y Cobranza Semanal")
+    st.info("Instrucciones: Modifique las casillas directamente en la tabla. Al presionar 'Enter' en el nombre, se corregirá automáticamente.")
     
-    # Pre-procesar corrección de nombres en la tabla base
+    # Pre-procesar corrección de nombres
     df_temp = st.session_state.df_clientes.copy()
     if "Cliente" in df_temp.columns:
         df_temp["Cliente"] = df_temp["Cliente"].apply(auto_corregir_nombre)
 
-    # Filtrar por cliente si se usa el control de búsqueda
+    # Filtrar por cliente si se busca
     if filtro_buscar:
         df_temp = df_temp[df_temp["Cliente"].str.contains(filtro_buscar, case=False, na=False)]
 
+    # Configuración limpia sin columna Avatar
     config_columnas_edicion = {
         "Cliente": st.column_config.TextColumn("Nombre del Cliente", required=True),
         "Monto Prestado": st.column_config.NumberColumn("Monto Prestado ($)", min_value=0.0, format="$%.2f", default=0.0),
-        "Es Renovación": st.column_config.CheckboxColumn("¿Renovación?", default=False),
+        "Es Renovación": st.column_config.CheckboxColumn("¿Es Renovación?", default=False),
         "Débito": st.column_config.NumberColumn("Débito ($)", min_value=0.0, format="$%.2f", default=0.0),
     }
 
     for sem in columnas_semanas:
         config_columnas_edicion[sem] = st.column_config.CheckboxColumn(sem, default=False)
 
-    # Tabla limpia en captura: sin imágenes ni enlaces
+    # Botón para agregar rápidamente una fila nueva
+    if st.button("Agregar Nuevo Cliente"):
+        nuevo_registro = {
+            "Cliente": "Nuevo Cliente",
+            "Monto Prestado": 1000.0,
+            "Es Renovación": False,
+            "Débito": 0.0,
+            **{sem: False for sem in columnas_semanas}
+        }
+        st.session_state.df_clientes = pd.concat([st.session_state.df_clientes, pd.DataFrame([nuevo_registro])], ignore_index=True)
+        st.rerun()
+
+    # Data Editor sin avatares ni hipervínculos
     df_editado = st.data_editor(
         df_temp,
         column_config=config_columnas_edicion,
@@ -267,7 +268,6 @@ with tab_captura:
 df_calculado = st.session_state.df_clientes.copy()
 
 df_calculado["Género"] = df_calculado["Cliente"].apply(auto_detectar_genero)
-df_calculado["Avatar"] = df_calculado["Género"].apply(lambda g: AVATAR_MUJER if g == "Mujer" else AVATAR_HOMBRE)
 
 df_calculado["Monto Prestado"] = df_calculado["Monto Prestado"].fillna(0.0)
 df_calculado["Débito"] = df_calculado["Débito"].fillna(0.0)
@@ -295,7 +295,7 @@ df_calculado["Saldo Restante"] = df_calculado["Total a Pagar"] - df_calculado["T
 
 # --- PESTAÑA RESUMEN ---
 with tab_resumen:
-    st.subheader("Métricas Globales")
+    st.subheader("Métricas Totales")
     
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -315,10 +315,9 @@ with tab_resumen:
         )
         
     st.divider()
-    st.subheader("Resumen General de Saldos y Cobranza")
+    st.subheader("Resumen de Saldos")
 
     columnas_resumen = [
-        "Avatar",
         "Cliente",
         "Género",
         "Monto Prestado",
@@ -336,11 +335,10 @@ with tab_resumen:
     st.dataframe(
         df_resumen,
         column_config={
-            "Avatar": st.column_config.ImageColumn("Perfil", width="small"),
-            "Cliente": st.column_config.TextColumn("Cliente"),
-            "Género": st.column_config.TextColumn("Género Detectado"),
+            "Cliente": st.column_config.TextColumn("Nombre Cliente"),
+            "Género": st.column_config.TextColumn("Género"),
             "Monto Prestado": st.column_config.NumberColumn("Monto Prestado", format="$%.2f"),
-            "Ganancia Empresa": st.column_config.NumberColumn("Ganancia Crece", format="$%.2f"),
+            "Ganancia Empresa": st.column_config.NumberColumn("Ganancia Empresa", format="$%.2f"),
             "Monto Entregado": st.column_config.NumberColumn("Monto Entregado", format="$%.2f"),
             "Total a Pagar": st.column_config.NumberColumn("Total a Pagar", format="$%.2f"),
             "Pago Semanal": st.column_config.NumberColumn("Pago Semanal", format="$%.2f"),
@@ -351,16 +349,16 @@ with tab_resumen:
         hide_index=True,
     )
 
-# --- PESTAÑA FICHAS E INE (CORREGIDO ERROR INDEXERROR) ---
+# --- PESTAÑA FICHAS E INE ---
 with tab_fichas:
-    st.subheader("Vista Previa de Identificación (INE México)")
-    st.caption("Ejemplo visual de credenciales de elector generadas para el expediente del cliente.")
+    st.subheader("Identificaciones INE (Muestra Visual)")
+    st.caption("Muestra automatizada de credenciales de elector para el expediente corporativo.")
     
     if not df_calculado.empty:
         columnas_por_fila = 3
         registros = df_calculado.to_dict('records')
         
-        # Iteración segura por bloques para evitar IndexError
+        # Iteración modular para prevenir errores de índice
         for i in range(0, len(registros), columnas_por_fila):
             chunk = registros[i:i + columnas_por_fila]
             cols = st.columns(columnas_por_fila)
@@ -371,4 +369,4 @@ with tab_fichas:
                     st.markdown(ine_html, unsafe_allow_html=True)
             st.markdown("---")
     else:
-        st.info("No hay clientes registrados para mostrar credenciales.")
+        st.info("No hay clientes registrados en el sistema.")

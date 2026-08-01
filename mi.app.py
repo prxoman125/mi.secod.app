@@ -74,7 +74,7 @@ columnas_semanas = [f"Semana {i}" for i in range(1, 16)]
 # Imagen por defecto si no hay foto cargada
 AVATAR_DEFAULT = "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
 
-# 2. Inicializar la base de datos en Session State (Preservar datos)
+# 2. Inicializar la base de datos en Session State
 if "df_clientes" not in st.session_state:
     data = [
         {
@@ -100,10 +100,9 @@ if "df_clientes" not in st.session_state:
     st.session_state.df_clientes = pd.DataFrame(data)
 
 
-# Callback para guardar los cambios y corregir texto de forma persistente
+# Callback para guardar los cambios de forma persistente
 def guardar_cambios():
     if "editor_tabla" in st.session_state:
-        # Obtener los cambios del editor
         edits = st.session_state["editor_tabla"]
 
         # Filas editadas
@@ -122,7 +121,6 @@ def guardar_cambios():
                     nueva_fila["Cliente"]
                 )
 
-            # Rellenar valores por defecto para evitar NaN
             for sem in columnas_semanas:
                 if sem not in nueva_fila:
                     nueva_fila[sem] = False
@@ -175,7 +173,6 @@ config_columnas = {
     ),
 }
 
-# Configuración de casillas para semanas
 for sem in columnas_semanas:
     config_columnas[sem] = st.column_config.CheckboxColumn(
         sem, help=f"Marca si pagó {sem}", default=False
@@ -193,11 +190,26 @@ st.data_editor(
     on_change=guardar_cambios,
 )
 
-# 4. Cálculos Matemáticos
+# 4. Cálculos Matemáticos Seguros
 df_calculado = st.session_state.df_clientes.copy()
 
+# Definir columnas calculadas con valores iniciales
+columnas_calculadas_defecto = [
+    "Descuento Renovación",
+    "Monto Entregado a Mano",
+    "Ganancia Abuela",
+    "Total a Pagar",
+    "Pago Semanal",
+    "Semanas Pagadas",
+    "Total Cobrado",
+    "Saldo Restante",
+]
+
+for col in columnas_calculadas_defecto:
+    if col not in df_calculado.columns:
+        df_calculado[col] = 0.0
+
 if not df_calculado.empty:
-    # Asegurar valores no nulos
     df_calculado["Monto Prestado"] = df_calculado["Monto Prestado"].fillna(0.0)
     df_calculado["Débito"] = df_calculado["Débito"].fillna(0.0)
     df_calculado["Es Renovación"] = df_calculado["Es Renovación"].fillna(False)
@@ -205,7 +217,6 @@ if not df_calculado.empty:
         False
     )
 
-    # Aplicar Fórmulas
     df_calculado["Descuento Renovación"] = df_calculado.apply(
         lambda row: (row["Monto Prestado"] / 1000.0) * 50.0
         if row["Es Renovación"]
@@ -239,70 +250,73 @@ if not df_calculado.empty:
         df_calculado["Total a Pagar"] - df_calculado["Total Cobrado"]
     )
 
-    st.markdown("---")
+st.markdown("---")
 
-    # --- MÉTRICAS GENERALES ---
-    st.subheader("📈 Resumen Financiero")
+# --- MÉTRICAS GENERALES ---
+st.subheader("📈 Resumen Financiero")
 
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric(
-            label="💰 TotalPrestado",
-            value=f"${df_calculado['Monto Prestado'].sum():,.2f}",
-        )
-    with col2:
-        st.metric(
-            label="💵 Ganancia Estimada",
-            value=f"${df_calculado['Ganancia Abuela'].sum():,.2f}",
-        )
-    with col3:
-        st.metric(
-            label="📉 Saldo Pendiente por Cobrar",
-            value=f"${df_calculado['Saldo Restante'].sum():,.2f}",
-        )
-
-    # --- TABLA RESUMEN ---
-    st.subheader("📊 Resumen de Cuentas por Cliente")
-
-    columnas_resumen = [
-        "Foto",
-        "Cliente",
-        "Monto Prestado",
-        "Ganancia Abuela",
-        "Monto Entregado a Mano",
-        "Total a Pagar",
-        "Pago Semanal",
-        "Semanas Pagadas",
-        "Total Cobrado",
-        "Saldo Restante",
-    ]
-
-    st.dataframe(
-        df_calculado[columnas_resumen],
-        column_config={
-            "Foto": st.column_config.ImageColumn("Foto", width="small"),
-            "Monto Prestado": st.column_config.NumberColumn(
-                "Monto Prestado", format="$%.2f"
-            ),
-            "Ganancia Abuela": st.column_config.NumberColumn(
-                "Ganancia Abuela", format="$%.2f"
-            ),
-            "Monto Entregado a Mano": st.column_config.NumberColumn(
-                "Entregado a Mano", format="$%.2f"
-            ),
-            "Total a Pagar": st.column_config.NumberColumn(
-                "Total a Pagar", format="$%.2f"
-            ),
-            "Pago Semanal": st.column_config.NumberColumn(
-                "Pago Semanal", format="$%.2f"
-            ),
-            "Total Cobrado": st.column_config.NumberColumn(
-                "Total Cobrado", format="$%.2f"
-            ),
-            "Saldo Restante": st.column_config.NumberColumn(
-                "Saldo Restante", format="$%.2f"
-            ),
-        },
-        use_container_width=True,
-        hide_index=True,
+col1, col2, col3 = st.columns(3)
+with col1:
+    st.metric(
+        label="💰 Total Prestado",
+        value=f"${df_calculado['Monto Prestado'].sum():,.2f}",
     )
+with col2:
+    st.metric(
+        label="💵 Ganancia Estimada",
+        value=f"${df_calculado['Ganancia Abuela'].sum():,.2f}",
+    )
+with col3:
+    st.metric(
+        label="📉 Saldo Pendiente por Cobrar",
+        value=f"${df_calculado['Saldo Restante'].sum():,.2f}",
+    )
+
+# --- TABLA RESUMEN SEGURA ---
+st.subheader("📊 Resumen de Cuentas por Cliente")
+
+columnas_resumen = [
+    "Foto",
+    "Cliente",
+    "Monto Prestado",
+    "Ganancia Abuela",
+    "Monto Entregado a Mano",
+    "Total a Pagar",
+    "Pago Semanal",
+    "Semanas Pagadas",
+    "Total Cobrado",
+    "Saldo Restante",
+]
+
+# Filtrar únicamente columnas existentes para prevenir KeyError
+cols_validas = [c for c in columnas_resumen if c in df_calculado.columns]
+
+st.dataframe(
+    df_calculado[cols_validas],
+    column_config={
+        "Foto": st.column_config.ImageColumn("Foto", width="small"),
+        "Monto Prestado": st.column_config.NumberColumn(
+            "Monto Prestado", format="$%.2f"
+        ),
+        "Ganancia Abuela": st.column_config.NumberColumn(
+            "Ganancia Abuela", format="$%.2f"
+        ),
+        "Monto Entregado a Mano": st.column_config.NumberColumn(
+            "Entregado a Mano", format="$%.2f"
+        ),
+        "Total a Pagar": st.column_config.NumberColumn(
+            "Total a Pagar", format="$%.2f"
+        ),
+        "Pago Semanal": st.column_config.NumberColumn(
+            "Pago Semanal", format="$%.2f"
+        ),
+        "Total Cobrado": st.column_config.NumberColumn(
+            "Total Cobrado", format="$%.2f"
+        ),
+        "Saldo Restante": st.column_config.NumberColumn(
+            "Saldo Restante", format="$%.2f"
+        ),
+    },
+    use_container_width=True,
+    hide_index=True,
+)

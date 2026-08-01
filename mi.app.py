@@ -10,9 +10,10 @@ st.set_page_config(
 )
 
 # --- RECURSOS MULTIMEDIA ---
-NOMBRE_ARCHIVO_LOGO = "logo.png"  # Guarda tu imagen en la carpeta del código con este nombre
+NOMBRE_ARCHIVO_LOGO = "logo.png"
 AVATAR_HOMBRE = "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
 AVATAR_MUJER = "https://cdn-icons-png.flaticon.com/512/3135/3135789.png"
+HUELLA_DIGITAL = "https://cdn-icons-png.flaticon.com/512/2913/2913133.png"
 
 # --- ESTILOS CSS PERSONALIZADOS ---
 st.markdown(
@@ -32,6 +33,15 @@ st.markdown(
         font-size: 0.95rem;
         margin: 4px 0 0 0;
     }
+
+    /* Reducción visual de avatares */
+    [data-testid="stTable"] img, [data-testid="stDataEditor"] img, .stDataFrame img {
+        max-height: 32px !important;
+        width: auto !important;
+        border-radius: 50%;
+        object-fit: cover;
+    }
+
     div[data-testid="stMetric"] {
         background-color: rgba(255, 255, 255, 0.05);
         border: 1px solid rgba(128, 128, 128, 0.2);
@@ -39,9 +49,11 @@ st.markdown(
         padding: 12px 16px;
         border-left: 5px solid #00A887;
     }
+
+    /* Credencial INE México con Huella Digital */
     .ine-card {
-        width: 250px;
-        height: 145px;
+        width: 260px;
+        height: 155px;
         border: 1px solid rgba(128, 128, 128, 0.4);
         background: rgba(128, 128, 128, 0.08);
         border-radius: 8px;
@@ -72,6 +84,16 @@ st.markdown(
     .ine-details {
         font-size: 8px;
         line-height: 1.2;
+        flex-grow: 1;
+    }
+    .ine-fingerprint {
+        width: 28px !important;
+        height: 35px !important;
+        opacity: 0.7;
+        object-fit: contain;
+        position: absolute;
+        right: 12px;
+        bottom: 22px;
     }
     .ine-footer {
         position: absolute;
@@ -112,27 +134,11 @@ def auto_detectar_genero(nombre: str) -> str:
         return "Hombre"
     primer_nombre = nombre.strip().split()[0].lower()
     femeninos_especiales = [
-        "guadalupe",
-        "rosario",
-        "carmen",
-        "pilar",
-        "beatriz",
-        "luz",
-        "mercedes",
-        "concepcion",
-        "socorro",
-        "isabel",
-        "raquel",
-        "fernanda",
+        "guadalupe", "rosario", "carmen", "pilar", "beatriz", 
+        "luz", "mercedes", "concepcion", "socorro", "isabel", 
+        "raquel", "fernanda",
     ]
-    masculinos_especiales = [
-        "jose",
-        "josé",
-        "andres",
-        "andrés",
-        "luca",
-        "borja",
-    ]
+    masculinos_especiales = ["jose", "josé", "andres", "andrés", "luca", "borja"]
 
     if primer_nombre in femeninos_especiales:
         return "Mujer"
@@ -158,6 +164,7 @@ def generar_html_ine(nombre: str, genero: str) -> str:
                 <b>DOMICILIO:</b><br>LEON, GUANAJUATO<br><br>
                 <b>CURP:</b> {curp_dummy}
             </div>
+            <img src="{HUELLA_DIGITAL}" class="ine-fingerprint">
         </div>
         <div class="ine-footer">
             IDMEX1829384938<<029384920384
@@ -188,7 +195,7 @@ if "df_clientes" not in st.session_state:
         },
     ])
 
-# --- ENCABEZADO CON CARGA SEGURA DE LOGO ---
+# --- ENCABEZADO Y LOGO ---
 col_logo, col_titulo = st.columns([1, 4])
 
 with col_logo:
@@ -244,7 +251,7 @@ tab_captura, tab_resumen, tab_fichas = st.tabs(
 with tab_captura:
     st.subheader("Captura de Clientes y Cobranza Semanal")
     st.info(
-        "Instrucciones: Modifique las casillas directamente en la tabla. Al presionar 'Enter' en el nombre, se corregirá automáticamente."
+        "Instrucciones: Modifique las casillas directamente en la tabla. El avatar cambiará automáticamente según el nombre."
     )
 
     df_temp = st.session_state.df_clientes.copy()
@@ -256,7 +263,17 @@ with tab_captura:
             df_temp["Cliente"].str.contains(filtro_buscar, case=False, na=False)
         ]
 
+    # Asignar Avatar a la izquierda para captura
+    df_temp["Foto"] = df_temp["Cliente"].apply(
+        lambda n: AVATAR_MUJER if auto_detectar_genero(n) == "Mujer" else AVATAR_HOMBRE
+    )
+    
+    # Reordenar columnas para que "Foto" aparezca a la izquierda
+    columnas_ordenadas = ["Foto", "Cliente", "Monto Prestado", "Es Renovación", "Débito"] + columnas_semanas
+    df_temp = df_temp[columnas_ordenadas]
+
     config_columnas_edicion = {
+        "Foto": st.column_config.ImageColumn("Foto", width="small"),
         "Cliente": st.column_config.TextColumn(
             "Nombre del Cliente", required=True
         ),
@@ -298,13 +315,23 @@ with tab_captura:
         key="editor_tabla",
     )
 
-    df_editado["Cliente"] = df_editado["Cliente"].apply(auto_corregir_nombre)
-    st.session_state.df_clientes = df_editado.copy()
+    # Eliminar columna auxiliar de foto antes de guardar en la sesión
+    if "Foto" in df_editado.columns:
+        df_guardar = df_editado.drop(columns=["Foto"])
+    else:
+        df_guardar = df_editado.copy()
+
+    df_guardar["Cliente"] = df_guardar["Cliente"].apply(auto_corregir_nombre)
+    st.session_state.df_clientes = df_guardar.copy()
 
 # --- CÁLCULOS FINANCIEROS ---
 df_calculado = st.session_state.df_clientes.copy()
 
 df_calculado["Género"] = df_calculado["Cliente"].apply(auto_detectar_genero)
+df_calculado["Foto"] = df_calculado["Género"].apply(
+    lambda g: AVATAR_MUJER if g == "Mujer" else AVATAR_HOMBRE
+)
+
 df_calculado["Monto Prestado"] = df_calculado["Monto Prestado"].fillna(0.0)
 df_calculado["Débito"] = df_calculado["Débito"].fillna(0.0)
 df_calculado["Es Renovación"] = df_calculado["Es Renovación"].fillna(False)
@@ -362,6 +389,7 @@ with tab_resumen:
     st.subheader("Resumen de Saldos")
 
     columnas_resumen = [
+        "Foto",
         "Cliente",
         "Género",
         "Monto Prestado",
@@ -379,6 +407,7 @@ with tab_resumen:
     st.dataframe(
         df_resumen,
         column_config={
+            "Foto": st.column_config.ImageColumn("Foto", width="small"),
             "Cliente": st.column_config.TextColumn("Nombre Cliente"),
             "Género": st.column_config.TextColumn("Género"),
             "Monto Prestado": st.column_config.NumberColumn(
@@ -409,9 +438,9 @@ with tab_resumen:
 
 # --- PESTAÑA FICHAS E INE ---
 with tab_fichas:
-    st.subheader("Identificaciones INE (Muestra Visual)")
+    st.subheader("Identificaciones INE con Huella Digital")
     st.caption(
-        "Muestra automatizada de credenciales de elector para el expediente corporativo."
+        "Muestra automatizada de credenciales de elector con huella dactilar para el expediente corporativo."
     )
 
     if not df_calculado.empty:

@@ -1,194 +1,189 @@
-import matplotlib.pyplot as plt
-import numpy as np
+import pandas as pd
 import streamlit as st
 
 # Configuración de la página
-st.set_page_config(page_title="Simulador de Atajadas de Portero", layout="wide")
-
-st.title("⚽ Simulador de Atajadas y Física del Tiro")
-st.write(
-    "Ingresa los parámetros del tiro y del portero manualmente para calcular"
-    " el tiempo de reacción, la dirección y la probabilidad de atajar el balón."
+st.set_page_config(
+    page_title="Sistema de Control de Cobranza - Crece & Credick", 
+    layout="wide"
 )
 
-# --- BARRA LATERAL: INGRESO MANUAL DE DATOS ---
-st.sidebar.header("⚙️ Configuración (Entrada Manual)")
+# Imagen por defecto para el avatar de usuario anónimo
+AVATAR_ANONIMO = "https://www.w3schools.com/howto/img_avatar.png"
 
-# 1. Medidas de la Portería
-st.sidebar.subheader("📐 Portería")
-ancho_porteria = st.sidebar.number_input(
-    "Ancho de la portería (m)", min_value=1.0, max_value=12.0, value=7.32, step=0.1
-)
-alto_porteria = st.sidebar.number_input(
-    "Alto de la portería (m)", min_value=1.0, max_value=4.0, value=2.44, step=0.05
-)
+# --- BARRA LATERAL (Sidebar) ---
+st.sidebar.title("Configuración")
+st.sidebar.subheader("Parámetros de Comisión")
 
-# 2. Datos del Portero
-st.sidebar.subheader("🧤 Portero")
-altura_portero = st.sidebar.number_input(
-    "Altura del portero (m)", min_value=1.00, max_value=2.30, value=1.85, step=0.01
+porcentaje_comision = st.sidebar.number_input(
+    "Porcentaje de Comisión / Ganancia (%)",
+    min_value=0.0,
+    max_value=100.0,
+    value=15.0,
+    step=0.5,
+    help="Porcentaje de ganancia aplicado sobre cada $100 prestados.",
 )
 
-# 3. Datos del Tiro
-st.sidebar.subheader("🎯 Tiro")
-distancia_tiro = st.sidebar.number_input(
-    "Distancia del tiro (m)", min_value=1.0, max_value=60.0, value=11.0, step=0.5
+factor_ganancia = porcentaje_comision / 100.0
+
+st.title("Crece & Credick")
+st.caption("Sistema Integral de Gestión de Crédito y Control de Cobranza")
+st.write("Ingrese los datos del cliente y marque las semanas liquidadas.")
+
+# 1. Crear las columnas de las 15 semanas
+columnas_semanas = [f"Semana {i}" for i in range(1, 16)]
+
+# 2. Datos iniciales de ejemplo
+data = [
+    {
+        "Avatar": AVATAR_ANONIMO,
+        "Cliente": "Cliente 1",
+        "Monto Prestado": 1000.0,
+        "Es Renovación": False,
+        "Débito": 0.0,
+        **{sem: False for sem in columnas_semanas},
+    },
+    {
+        "Avatar": AVATAR_ANONIMO,
+        "Cliente": "Cliente 2",
+        "Monto Prestado": 2500.0,
+        "Es Renovación": True,
+        "Débito": 300.0,
+        **{sem: True if i <= 3 else False for i, sem in enumerate(columnas_semanas, 1)},
+    },
+]
+
+df_inicial = pd.DataFrame(data)
+
+# Configuración del editor interactivo
+config_columnas = {
+    "Avatar": st.column_config.ImageColumn(
+        "Perfil", 
+        help="Fotografía o avatar del cliente"
+    ),
+    "Cliente": st.column_config.TextColumn("Nombre del Cliente"),
+    "Monto Prestado": st.column_config.NumberColumn(
+        "Monto Prestado ($)", min_value=0.0, format="$%.2f", default=0.0
+    ),
+    "Es Renovación": st.column_config.CheckboxColumn(
+        "¿Renovación?",
+        help="Aplica bonificación/descuento por renovación.",
+        default=False,
+    ),
+    "Débito": st.column_config.NumberColumn(
+        "Débito / Saldo Anterior ($)", min_value=0.0, format="$%.2f", default=0.0
+    ),
+}
+
+for sem in columnas_semanas:
+    config_columnas[sem] = st.column_config.CheckboxColumn(
+        sem, help=f"Estatus de pago para {sem}", default=False
+    )
+
+# 3. Tabla editable
+df_editado = st.data_editor(
+    df_inicial,
+    column_config=config_columnas,
+    num_rows="dynamic",
+    hide_index=True,
+    disabled=["Avatar"] # El avatar se mantiene fijo por defecto en nuevas filas
 )
-velocidad_kmh = st.sidebar.number_input(
-    "Velocidad del balón (km/h)", min_value=10.0, max_value=200.0, value=90.0, step=5.0
+
+# 4. Limpieza de datos
+df_calculado = df_editado.copy()
+
+df_calculado["Avatar"] = df_calculado["Avatar"].fillna(AVATAR_ANONIMO)
+df_calculado["Cliente"] = df_calculado["Cliente"].fillna("Nuevo Cliente")
+df_calculado["Monto Prestado"] = df_calculado["Monto Prestado"].fillna(0.0)
+df_calculado["Débito"] = df_calculado["Débito"].fillna(0.0)
+df_calculado["Es Renovación"] = df_calculado["Es Renovación"].fillna(False)
+df_calculado[columnas_semanas] = df_calculado[columnas_semanas].fillna(False)
+
+# Fórmulas de cálculo
+FACTOR_INTERES = 1.20
+SEMANAS_TOTALES = 15
+
+df_calculado["Descuento Renovación"] = df_calculado.apply(
+    lambda row: (row["Monto Prestado"] / 1000.0) * 50.0
+    if row["Es Renovación"]
+    else 0.0,
+    axis=1,
 )
 
-# Ubicación manual del disparo en coordenadas (metros)
-st.sidebar.markdown("**🎯 Dirección Manual del Balón (en metros):**")
-coordenada_x = st.sidebar.number_input(
-    f"Posición horizontal X (0 = Poste izq, {ancho_porteria:.2f} = Poste der)",
-    min_value=-1.0,
-    max_value=ancho_porteria + 1.0,
-    value=ancho_porteria / 2,
-    step=0.1,
-)
-coordenada_y = st.sidebar.number_input(
-    f"Posición vertical Y (0 = Suelo, {alto_porteria:.2f} = Travesaño)",
-    min_value=-0.5,
-    max_value=alto_porteria + 1.0,
-    value=alto_porteria / 2,
-    step=0.05,
+df_calculado["Monto Entregado"] = (
+    df_calculado["Monto Prestado"]
+    - df_calculado["Descuento Renovación"]
+    - df_calculado["Débito"]
 )
 
-# --- CÁLCULOS FÍSICOS Y LÓGICA ---
-
-# Convertir velocidad a m/s
-velocidad_ms = velocidad_kmh / 3.6
-
-# Tiempo de vuelo del balón (Tiempo de reacción disponible)
-tiempo_reaccion = distancia_tiro / velocidad_ms
-
-# Coordenadas del centro de la portería
-centro_x = ancho_porteria / 2
-
-# Calcular porcentaje Y dentro del marco para la recomendación
-porcentaje_y = (coordenada_y / alto_porteria) * 100
-
-# Recomendación de la atajada según la altura vertical
-if porcentaje_y <= 33:
-  zona_altura = "Abajo (Raza / Al suelo)"
-  recomendacion = (
-      "El portero debe lanzarse arrastrado o colocar la mano abajo de rápido"
-      " alcance."
-  )
-elif porcentaje_y <= 66:
-  zona_altura = "A media altura"
-  recomendacion = (
-      "El portero debe realizar un salto lateral a media altura extendiendo"
-      " los brazos firmes."
-  )
-else:
-  zona_altura = "Arriba (Cerca del travesaño)"
-  recomendacion = (
-      "El portero debe realizar un salto explosivo hacia arriba/diagonal"
-      " buscando el manotazo."
-  )
-
-# Verificar si el tiro va fuera
-es_gol_o_arco = (0 <= coordenada_x <= ancho_porteria) and (
-    0 <= coordenada_y <= alto_porteria
+df_calculado["Ganancia Empresa"] = (
+    df_calculado["Monto Prestado"] * factor_ganancia
 )
 
-# Cálculo simplificado de la Probabilidad de Atajada
-distancia_desde_centro = np.sqrt(
-    (coordenada_x - centro_x) ** 2 + coordenada_y**2
+df_calculado["Total a Pagar"] = (
+    df_calculado["Monto Prestado"] * FACTOR_INTERES
 )
-alcance_maximo = altura_portero * 1.45
-tiempo_util = tiempo_reaccion - 0.25  # Tiempo de reacción humano (~0.25s)
+df_calculado["Pago Semanal"] = (
+    df_calculado["Total a Pagar"] / SEMANAS_TOTALES
+)
 
-if tiempo_util <= 0 or not es_gol_o_arco:
-  probabilidad = 0.0
-else:
-  velocidad_requerida = distancia_desde_centro / tiempo_util
+df_calculado["Semanas Pagadas"] = df_calculado[columnas_semanas].sum(axis=1)
+df_calculado["Total Cobrado"] = (
+    df_calculado["Semanas Pagadas"] * df_calculado["Pago Semanal"]
+)
+df_calculado["Saldo Restante"] = (
+    df_calculado["Total a Pagar"] - df_calculado["Total Cobrado"]
+)
 
-  if velocidad_requerida <= (alcance_maximo * 2.0):
-    probabilidad = 95 - (velocidad_requerida * 15)
-  else:
-    probabilidad = 20 - (velocidad_requerida * 5)
+# --- 5. Métricas Generales ---
+ganancia_total = df_calculado["Ganancia Empresa"].sum()
+monto_total_prestado = df_calculado["Monto Prestado"].sum()
 
-  # Ajuste por tiros a las esquinas superiores (escuadras)
-  porcentaje_x = (coordenada_x / ancho_porteria) * 100
-  if (porcentaje_x < 15 or porcentaje_x > 85) and porcentaje_y > 75:
-    probabilidad -= 25
-
-probabilidad = max(0.0, min(100.0, probabilidad))
-
-# --- MOSTRAR RESULTADOS EN STREAMLIT ---
+st.divider()
 
 col1, col2 = st.columns(2)
-
 with col1:
-  st.subheader("⏱️ Análisis del Tiro")
-  st.metric(
-      label="Tiempo de Reacción Disponible",
-      value=f"{tiempo_reaccion:.2f} segundos",
-  )
-  st.metric(
-      label="Velocidad del Balón",
-      value=f"{velocidad_ms:.1f} m/s ({velocidad_kmh:.0f} km/h)",
-  )
-  st.metric(label="Distancia del Disparo", value=f"{distancia_tiro:.1f} metros")
-
+    st.metric(
+        label="Total Capital Prestado", 
+        value=f"${monto_total_prestado:,.2f}"
+    )
 with col2:
-  st.subheader("🧤 Análisis de la Atajada")
-  if not es_gol_o_arco:
-    st.error("❌ El disparo va fuera de la portería.")
-  else:
-    st.metric(label="Probabilidad de Atajada", value=f"{probabilidad:.1f} %")
-    st.info(f"**Zona de la atajada:** {zona_altura}")
-    st.success(f"**Recomendación:** {recomendacion}")
+    st.metric(
+        label=f"Comisión / Ganancia Estimada ({porcentaje_comision:.1f}%)",
+        value=f"${ganancia_total:,.2f}",
+    )
 
-st.markdown("---")
+st.divider()
 
-# --- REPRESENTACIÓN GRÁFICA DE LA PORTERÍA ---
-st.subheader("🎯 Visualización del Disparo en la Portería")
+# 6. Tabla Resumen
+st.subheader("Resumen de Saldos y Cobranza")
 
-fig, ax = plt.subplots(figsize=(8, 4))
+columnas_resumen = [
+    "Avatar",
+    "Cliente",
+    "Monto Prestado",
+    "Ganancia Empresa",
+    "Monto Entregado",
+    "Total a Pagar",
+    "Pago Semanal",
+    "Semanas Pagadas",
+    "Total Cobrado",
+    "Saldo Restante",
+]
 
-# Dibujar Marco de la Portería
-ax.plot(
-    [0, 0, ancho_porteria, ancho_porteria],
-    [0, alto_porteria, alto_porteria, 0],
-    color="black",
-    lw=5,
-    label="Portería",
+df_resumen = df_calculado[columnas_resumen]
+
+st.dataframe(
+    df_resumen,
+    column_config={
+        "Avatar": st.column_config.ImageColumn("Perfil"),
+        "Monto Prestado": st.column_config.NumberColumn("Monto Prestado", format="$%.2f"),
+        "Ganancia Empresa": st.column_config.NumberColumn("Ganancia Crece & Credick", format="$%.2f"),
+        "Monto Entregado": st.column_config.NumberColumn("Monto Entregado", format="$%.2f"),
+        "Total a Pagar": st.column_config.NumberColumn("Total a Pagar", format="$%.2f"),
+        "Pago Semanal": st.column_config.NumberColumn("Pago Semanal", format="$%.2f"),
+        "Total Cobrado": st.column_config.NumberColumn("Total Cobrado", format="$%.2f"),
+        "Saldo Restante": st.column_config.NumberColumn("Saldo Restante", format="$%.2f"),
+    },
+    use_container_width=True,
+    hide_index=True,
 )
-# Línea de Gol (Suelo)
-ax.plot([-0.5, ancho_porteria + 0.5], [0, 0], color="green", lw=3)
-
-# Posición del Portero (Centro, parado)
-ax.plot(
-    [centro_x, centro_x],
-    [0, min(altura_portero, alto_porteria)],
-    color="blue",
-    lw=4,
-    label="Portero (Inicio)",
-)
-ax.scatter([centro_x], [min(altura_portero, alto_porteria)], color="blue", s=100)
-
-# Punto de Impacto del Balón
-color_balon = "red" if es_gol_o_arco else "gray"
-ax.scatter(
-    [coordenada_x],
-    [coordenada_y],
-    color=color_balon,
-    s=200,
-    zorder=5,
-    label="Ubicación del Balón",
-)
-
-# Ajustar límites del gráfico
-ax.set_xlim(-1, ancho_porteria + 1)
-ax.set_ylim(-0.5, alto_porteria + 0.5)
-ax.set_xlabel("Ancho (m)")
-ax.set_ylabel("Alto (m)")
-ax.set_title("Vista Frontal de la Portería")
-ax.legend(loc="upper right")
-ax.grid(True, linestyle="--", alpha=0.5)
-
-st.pyplot(fig)

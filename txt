@@ -4,3 +4,4 @@ diflibb
 re
 unicodedata
 numpy
+matplotlib

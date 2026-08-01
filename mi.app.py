@@ -1,322 +1,132 @@
-import unicodedata
-import pandas as pd
 import streamlit as st
+import numpy as np
 
 # Configuración de la página
-st.set_page_config(
-    page_title="Calculadora y Control de Cobranza",
-    page_icon="👵",
-    layout="wide",
-)
+st.set_page_config(page_title="Simulador de Atajadas de Portero", layout="wide")
 
-# Configuración fija de comisión e interés
-PORCENTAJE_COMISION = 15.0
-FACTOR_GANANCIA = PORCENTAJE_COMISION / 100.0
-FACTOR_INTERES = 1.20
-SEMANAS_TOTALES = 15
+st.title("⚽ Simulador de Atajadas y Física del Tiro")
+st.write("Ajusta los parámetros del tiro y del portero para calcular el tiempo de reacción, la dirección y la probabilidad de atajar el balón.")
 
-# Diccionario de acentuación automática
-NOMBRES_ACENTUADOS = {
-    "maria": "María",
-    "jose": "José",
-    "jesus": "Jesús",
-    "angel": "Ángel",
-    "ramon": "Ramón",
-    "martin": "Martín",
-    "raul": "Raúl",
-    "sofia": "Sofía",
-    "lucia": "Lucía",
-    "veronica": "Verónica",
-    "monica": "Mónica",
-    "andres": "Andrés",
-    "adrian": "Adrián",
-    "oscar": "Óscar",
-    "ruben": "Rubén",
-    "perez": "Pérez",
-    "gomez": "Gómez",
-    "rodriguez": "Rodríguez",
-    "hernandez": "Hernández",
-    "martinez": "Martínez",
-    "lopez": "López",
-    "gonzalez": "González",
-    "sanchez": "Sánchez",
-    "ramirez": "Ramírez",
-    "diaz": "Díaz",
-    "vazquez": "Vázquez",
-    "jimenez": "Jiménez",
-    "gutierrez": "Gutiérrez",
-    "alvarez": "Álvarez",
-    "suarez": "Suárez",
-}
+# --- BARRA LATERAL: PARÁMETROS ---
+st.sidebar.header("⚙️ Configuración")
 
+# 1. Medidas de la Portería
+st.sidebar.subheader("📐 Portería")
+ancho_porteria = st.sidebar.slider("Ancho de la portería (m)", 3.0, 7.32, 7.32, step=0.1)
+alto_porteria = st.sidebar.slider("Alto de la portería (m)", 1.5, 2.44, 2.44, step=0.05)
 
-def auto_corregir_nombre(cadena):
-    """Corrige espacios, mayúsculas iniciales y acentos."""
-    if not isinstance(cadena, str) or not cadena.strip():
-        return ""
-    texto = " ".join(cadena.split())
-    palabras = texto.split(" ")
-    palabras_corregidas = []
+# 2. Datos del Portero
+st.sidebar.subheader("🧤 Portero")
+altura_portero = st.sidebar.slider("Altura del portero (m)", 1.50, 2.10, 1.85, step=0.01)
 
-    for p in palabras:
-        p_lower = p.lower()
-        if p_lower in NOMBRES_ACENTUADOS:
-            palabras_corregidas.append(NOMBRES_ACENTUADOS[p_lower])
-        else:
-            palabras_corregidas.append(p.capitalize())
+# 3. Datos del Tiro
+st.sidebar.subheader("🎯 Tiro")
+distancia_tiro = st.sidebar.slider("Distancia del tiro (m)", 9.15, 30.0, 11.0, step=0.5) # 11m es el punto penal
+velocidad_kmh = st.sidebar.slider("Velocidad del balón (km/h)", 40, 140, 90, step=5)
 
-    return " ".join(palabras_corregidas)
+# Dirección del tiro
+st.sidebar.markdown("**Ubicación del Tiro en la Portería:**")
+pos_x = st.sidebar.slider("Posición horizontal X (0 = Izquierda, 100 = Derecha)", 0, 100, 50)
+pos_y = st.sidebar.slider("Posición vertical Y (0 = Suelo, 100 = Travesaño)", 0, 100, 50)
 
+# --- CÁLCULOS FÍSICOS Y LÓGICA ---
 
-# 1. Crear las columnas de las 15 semanas
-columnas_semanas = [f"Semana {i}" for i in range(1, 16)]
+# Convertir velocidad a m/s
+velocidad_ms = velocidad_kmh / 3.6
 
-# Imagen por defecto si no hay foto cargada
-AVATAR_DEFAULT = "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
+# Tiempo de vuelo del balón (Tiempo de reacción disponible)
+tiempo_reaccion = distancia_tiro / velocidad_ms
 
-# 2. Inicializar la base de datos en Session State
-if "df_clientes" not in st.session_state:
-    data = [
-        {
-            "Foto": "https://raw.githubusercontent.com/streamlit/streamlit/main/e2e/scripts/components_iframe/static/avatar.png",
-            "Cliente": "María Gómez",
-            "Monto Prestado": 1000.0,
-            "Es Renovación": False,
-            "Débito": 0.0,
-            **{sem: False for sem in columnas_semanas},
-        },
-        {
-            "Foto": AVATAR_DEFAULT,
-            "Cliente": "Juan Pérez",
-            "Monto Prestado": 2500.0,
-            "Es Renovación": True,
-            "Débito": 300.0,
-            **{
-                sem: True if i <= 3 else False
-                for i, sem in enumerate(columnas_semanas, 1)
-            },
-        },
-    ]
-    st.session_state.df_clientes = pd.DataFrame(data)
+# Coordenadas reales del impacto dentro de la portería (en metros)
+coordenada_x = (pos_x / 100) * ancho_porteria
+coordenada_y = (pos_y / 100) * alto_porteria
 
+# Coordenadas del centro de la portería
+centro_x = ancho_porteria / 2
 
-# Callback para guardar los cambios de forma persistente
-def guardar_cambios():
-    if "editor_tabla" in st.session_state:
-        edits = st.session_state["editor_tabla"]
+# Recomendación de la atajada según la altura vertical (Y)
+if pos_y <= 33:
+    zona_altura = "Abajo (Raza / Al suelo)"
+    recomendacion = "El portero debe lanzarse arrastrado o colocar la mano abajo de rápido alcance."
+elif pos_y <= 66:
+    zona_altura = "A media altura"
+    recomendacion = "El portero debe realizar un salto lateral a media altura extendiendo los brazos firmes."
+else:
+    zona_altura = "Arriba (Cerca del travesaño)"
+    recomendacion = "El portero debe realizar un salto explosivo hacia arriba/diagonal buscando el manotazo."
 
-        # Filas editadas
-        for idx, cambios in edits.get("edited_rows", {}).items():
-            for col, val in cambios.items():
-                if col == "Cliente":
-                    val = auto_corregir_nombre(val)
-                st.session_state.df_clientes.at[idx, col] = val
+# Cálculo simplificado de la Probabilidad de Atajada
+# 1. Distancia desde el centro (asumiendo que el portero arranca centrado)
+distancia_desde_centro = np.sqrt((coordenada_x - centro_x)**2 + coordenada_y**2)
 
-        # Filas agregadas
-        for nueva_fila in edits.get("added_rows", []):
-            if "Foto" not in nueva_fila or not nueva_fila["Foto"]:
-                nueva_fila["Foto"] = AVATAR_DEFAULT
-            if "Cliente" in nueva_fila:
-                nueva_fila["Cliente"] = auto_corregir_nombre(
-                    nueva_fila["Cliente"]
-                )
+# 2. Alcance máximo estimado del portero con salto (relacionado con su altura)
+alcance_maximo = altura_portero * 1.45
 
-            for sem in columnas_semanas:
-                if sem not in nueva_fila:
-                    nueva_fila[sem] = False
+# 3. Factor de tiempo (Un humano necesita ~0.25s solo para reaccionar antes de moverse)
+tiempo_util = tiempo_reaccion - 0.25 
 
-            st.session_state.df_clientes = pd.concat(
-                [
-                    st.session_state.df_clientes,
-                    pd.DataFrame([nueva_fila]),
-                ],
-                ignore_index=True,
-            )
+if tiempo_util <= 0:
+    probabilidad = 0.0
+else:
+    # Velocidad de cobertura requerida por el portero en m/s
+    velocidad_requerida = distancia_desde_centro / tiempo_util
+    
+    # Evaluar la probabilidad según qué tan rápido tendría que moverse el arquero
+    if velocidad_requerida <= (alcance_maximo * 2.0):
+        probabilidad = 95 - (velocidad_requerida * 15)
+    else:
+        probabilidad = 20 - (velocidad_requerida * 5)
 
-        # Filas eliminadas
-        filas_borradas = edits.get("deleted_rows", [])
-        if filas_borradas:
-            st.session_state.df_clientes = st.session_state.df_clientes.drop(
-                filas_borradas
-            ).reset_index(drop=True)
+# Ajustes de bordes y esquinas (ángulos muertos)
+if (pos_x < 10 or pos_x > 90) and pos_y > 80:
+    probabilidad -= 25 # Escuadras/Ángulo superior
 
+probabilidad = max(0.0, min(100.0, probabilidad)) # Limitar entre 0% y 100%
 
-# --- INTERFAZ PRINCIPAL ---
-st.title("👵 Control de Cobranza y Préstamos")
-st.caption(
-    "Sistema de control semanal. Las casillas marcadas y los nombres se guardan en tiempo real."
-)
+# --- MOSTRAR RESULTADOS EN STREAMLIT ---
 
-st.markdown("---")
+col1, col2 = st.columns(2)
 
-# Configuración visual de columnas
-config_columnas = {
-    "Foto": st.column_config.ImageColumn(
-        "Foto", help="Enlace URL de la foto del cliente", width="small"
-    ),
-    "Cliente": st.column_config.TextColumn(
-        "Nombre del Cliente",
-        help="Escribe el nombre; se autocorregirá mayúsculas y acentos.",
-        required=True,
-        width="medium",
-    ),
-    "Monto Prestado": st.column_config.NumberColumn(
-        "Monto Prestado ($)", min_value=0.0, format="$%.2f", default=0.0
-    ),
-    "Es Renovación": st.column_config.CheckboxColumn(
-        "¿Renovación?",
-        help="Aplica descuento de $50 por cada $1,000 prestados.",
-        default=False,
-    ),
-    "Débito": st.column_config.NumberColumn(
-        "Débito Anterior ($)", min_value=0.0, format="$%.2f", default=0.0
-    ),
-}
-
-for sem in columnas_semanas:
-    config_columnas[sem] = st.column_config.CheckboxColumn(
-        sem, help=f"Marca si pagó {sem}", default=False
-    )
-
-# 3. Mostrar Editor de Tabla Interactivo
-st.subheader("📋 Registro e Historial de Pagos")
-
-st.data_editor(
-    st.session_state.df_clientes,
-    column_config=config_columnas,
-    num_rows="dynamic",
-    hide_index=True,
-    key="editor_tabla",
-    on_change=guardar_cambios,
-)
-
-# 4. Cálculos Matemáticos Seguros
-df_calculado = st.session_state.df_clientes.copy()
-
-# Definir columnas calculadas con valores iniciales
-columnas_calculadas_defecto = [
-    "Descuento Renovación",
-    "Monto Entregado a Mano",
-    "Ganancia Abuela",
-    "Total a Pagar",
-    "Pago Semanal",
-    "Semanas Pagadas",
-    "Total Cobrado",
-    "Saldo Restante",
-]
-
-for col in columnas_calculadas_defecto:
-    if col not in df_calculado.columns:
-        df_calculado[col] = 0.0
-
-if not df_calculado.empty:
-    df_calculado["Monto Prestado"] = df_calculado["Monto Prestado"].fillna(0.0)
-    df_calculado["Débito"] = df_calculado["Débito"].fillna(0.0)
-    df_calculado["Es Renovación"] = df_calculado["Es Renovación"].fillna(False)
-    df_calculado[columnas_semanas] = df_calculado[columnas_semanas].fillna(
-        False
-    )
-
-    df_calculado["Descuento Renovación"] = df_calculado.apply(
-        lambda row: (row["Monto Prestado"] / 1000.0) * 50.0
-        if row["Es Renovación"]
-        else 0.0,
-        axis=1,
-    )
-
-    df_calculado["Monto Entregado a Mano"] = (
-        df_calculado["Monto Prestado"]
-        - df_calculado["Descuento Renovación"]
-        - df_calculado["Débito"]
-    )
-
-    df_calculado["Ganancia Abuela"] = (
-        df_calculado["Monto Prestado"] * FACTOR_GANANCIA
-    )
-    df_calculado["Total a Pagar"] = (
-        df_calculado["Monto Prestado"] * FACTOR_INTERES
-    )
-    df_calculado["Pago Semanal"] = (
-        df_calculado["Total a Pagar"] / SEMANAS_TOTALES
-    )
-
-    df_calculado["Semanas Pagadas"] = df_calculado[columnas_semanas].sum(
-        axis=1
-    )
-    df_calculado["Total Cobrado"] = (
-        df_calculado["Semanas Pagadas"] * df_calculado["Pago Semanal"]
-    )
-    df_calculado["Saldo Restante"] = (
-        df_calculado["Total a Pagar"] - df_calculado["Total Cobrado"]
-    )
-
-st.markdown("---")
-
-# --- MÉTRICAS GENERALES ---
-st.subheader("📈 Resumen Financiero")
-
-col1, col2, col3 = st.columns(3)
 with col1:
-    st.metric(
-        label="💰 Total Prestado",
-        value=f"${df_calculado['Monto Prestado'].sum():,.2f}",
-    )
+    st.subheader("⏱️ Análisis del Tiro")
+    st.metric(label="Tiempo de Reacción Disponible", value=f"{tiempo_reaccion:.2f} segundos")
+    st.metric(label="Velocidad del Balón", value=f"{velocidad_ms:.1f} m/s ({velocidad_kmh} km/h)")
+    st.metric(label="Distancia del Disparo", value=f"{distancia_tiro} metros")
+
 with col2:
-    st.metric(
-        label="💵 Ganancia Estimada",
-        value=f"${df_calculado['Ganancia Abuela'].sum():,.2f}",
-    )
-with col3:
-    st.metric(
-        label="📉 Saldo Pendiente por Cobrar",
-        value=f"${df_calculado['Saldo Restante'].sum():,.2f}",
-    )
+    st.subheader("🧤 Análisis de la Atajada")
+    st.metric(label="Probabilidad de Atajada", value=f"{probabilidad:.1f} %")
+    st.info(f"**Zona de la atajada:** {zona_altura}")
+    st.success(f"**Recomendación:** {recomendacion}")
 
-# --- TABLA RESUMEN SEGURA ---
-st.subheader("📊 Resumen de Cuentas por Cliente")
+st.markdown("---")
 
-columnas_resumen = [
-    "Foto",
-    "Cliente",
-    "Monto Prestado",
-    "Ganancia Abuela",
-    "Monto Entregado a Mano",
-    "Total a Pagar",
-    "Pago Semanal",
-    "Semanas Pagadas",
-    "Total Cobrado",
-    "Saldo Restante",
-]
+# --- REPRESENTACIÓN GRÁFICA DE LA PORTERÍA ---
+st.subheader("🎯 Visualización del Disparo en la Portería")
 
-# Filtrar únicamente columnas existentes para prevenir KeyError
-cols_validas = [c for c in columnas_resumen if c in df_calculado.columns]
+import matplotlib.pyplot as plt
 
-st.dataframe(
-    df_calculado[cols_validas],
-    column_config={
-        "Foto": st.column_config.ImageColumn("Foto", width="small"),
-        "Monto Prestado": st.column_config.NumberColumn(
-            "Monto Prestado", format="$%.2f"
-        ),
-        "Ganancia Abuela": st.column_config.NumberColumn(
-            "Ganancia Abuela", format="$%.2f"
-        ),
-        "Monto Entregado a Mano": st.column_config.NumberColumn(
-            "Entregado a Mano", format="$%.2f"
-        ),
-        "Total a Pagar": st.column_config.NumberColumn(
-            "Total a Pagar", format="$%.2f"
-        ),
-        "Pago Semanal": st.column_config.NumberColumn(
-            "Pago Semanal", format="$%.2f"
-        ),
-        "Total Cobrado": st.column_config.NumberColumn(
-            "Total Cobrado", format="$%.2f"
-        ),
-        "Saldo Restante": st.column_config.NumberColumn(
-            "Saldo Restante", format="$%.2f"
-        ),
-    },
-    use_container_width=True,
-    hide_index=True,
-)
+fig, ax = plt.subplots(figsize=(8, 4))
+
+# Dibujar Marco de la Portería
+ax.plot([0, 0, ancho_porteria, ancho_porteria], [0, alto_porteria, alto_porteria, 0], color="black", lw=5)
+# Línea de Gol (Suelo)
+ax.plot([-0.5, ancho_porteria + 0.5], [0, 0], color="green", lw=3)
+
+# Posición del Portero (Centro, parado)
+ax.plot([centro_x, centro_x], [0, min(altura_portero, alto_porteria)], color="blue", lw=4, label="Portero (Inicio)")
+ax.scatter([centro_x], [min(altura_portero, alto_porteria)], color="blue", s=100)
+
+# Punto de Impacto del Balón
+ax.scatter([coordenada_x], [coordenada_y], color="red", s=200, zorder=5, label="Ubicación del Balón")
+
+# Ajustar límites del gráfico
+ax.set_xlim(-1, ancho_porteria + 1)
+ax.set_ylim(-0.2, alto_porteria + 0.5)
+ax.set_xlabel("Ancho (m)")
+ax.set_ylabel("Alto (m)")
+ax.set_title("Vista Frontal de la Portería")
+ax.legend(loc="upper right")
+ax.grid(True, linestyle="--", alpha=0.5)
+
+st.pyplot(fig)

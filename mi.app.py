@@ -1,4 +1,5 @@
 import difflib
+import re
 import pandas as pd
 import streamlit as st
 
@@ -13,26 +14,80 @@ FACTOR_GANANCIA = PORCENTAJE_COMISION / 100.0
 FACTOR_INTERES = 1.20
 SEMANAS_TOTALES = 15
 
+# Diccionario de reemplazos comunes para acentuación automática
+DICCIONARIO_ACENTOS = {
+    "maria": "María",
+    "jose": "José",
+    "jesus": "Jesús",
+    "angel": "Ángel",
+    "ramon": "Ramón",
+    "martin": "Martín",
+    "raul": "Raúl",
+    "sofi": "Sofía",
+    "sofia": "Sofía",
+    "lucia": "Lucía",
+    "veronica": "Verónica",
+    "monica": "Mónica",
+    "perez": "Pérez",
+    "gomez": "Gómez",
+    "rodriguez": "Rodríguez",
+    "hernandez": "Hernández",
+    "martinez": "Martínez",
+    "lopez": "López",
+    "gonzalez": "González",
+    "sanchez": "Sánchez",
+    "ramirez": "Ramírez",
+    "flores": "Flores",
+    "diaz": "Díaz",
+    "vazquez": "Vázquez",
+    "jimenez": "Jiménez",
+    "gutierrez": "Gutiérrez",
+}
+
+
+def corregir_y_formatear_nombre(nombre_texto):
+    """Corrige espacios, convierte a Mayúscula Inicial y aplica acentos comunes."""
+    if not isinstance(nombre_texto, str) or not nombre_texto.strip():
+        return "Nuevo Cliente"
+
+    # 1. Quitar espacios extras
+    texto_limpio = " ".join(nombre_texto.split())
+
+    # 2. Reemplazar palabras conocidas sin acento por su versión acentuada
+    palabras = texto_limpio.split()
+    palabras_corregidas = []
+
+    for palabra in palabras:
+        palabra_lower = palabra.lower()
+        if palabra_lower in DICCIONARIO_ACENTOS:
+            palabras_corregidas.append(DICCIONARIO_ACENTOS[palabra_lower])
+        else:
+            # Poner primera letra en mayúscula (capitalizar)
+            palabras_corregidas.append(palabra.capitalize())
+
+    return " ".join(palabras_corregidas)
+
+
 st.title("👵 Calculadora y Control de Cobranza")
 st.write(
-    "Ingresa o busca los datos de tus clientes y marca con una palomita (✔️) las semanas pagadas."
+    "Ingresa o busca los datos de tus clientes. Los nombres se **corregirán automáticamente** (mayúsculas y acentos)."
 )
 
 # 1. Crear las columnas de las 15 semanas
 columnas_semanas = [f"Semana {i}" for i in range(1, 16)]
 
-# 2. Datos iniciales de ejemplo en estado de sesión (Session State) para preservar cambios
+# 2. Datos iniciales de ejemplo en estado de sesión
 if "df_clientes" not in st.session_state:
     data = [
         {
-            "Cliente": "Maria Gomez",
+            "Cliente": "María Gómez",
             "Monto Prestado": 1000.0,
             "Es Renovación": False,
             "Débito": 0.0,
             **{sem: False for sem in columnas_semanas},
         },
         {
-            "Cliente": "Juan Perez",
+            "Cliente": "Juan Pérez",
             "Monto Prestado": 2500.0,
             "Es Renovación": True,
             "Débito": 300.0,
@@ -44,48 +99,38 @@ if "df_clientes" not in st.session_state:
     ]
     st.session_state.df_clientes = pd.DataFrame(data)
 
-# --- BÚSQUEDA Y CORRECCIÓN AUTOMÁTICA DE NOMBRES ---
+# --- BÚSQUEDA DE CLIENTES ---
 st.subheader("🔍 Buscar Cliente")
 busqueda_input = st.text_input(
-    "Escribe el nombre del cliente para filtrar:",
-    placeholder="Ej. Maria Gmez (corrige errores tipográficos automáticamente)",
+    "Filtrar por nombre:",
+    placeholder="Ej. maria perez (se corregirá automáticamente)",
 )
 
 df_para_mostrar = st.session_state.df_clientes.copy()
 
 if busqueda_input.strip():
     lista_clientes = df_para_mostrar["Cliente"].dropna().astype(str).tolist()
-
-    # Buscar coincidencia exacta o similar
     coincidencias = difflib.get_close_matches(
-        busqueda_input, lista_clientes, n=3, cutoff=0.4
+        busqueda_input, lista_clientes, n=3, cutoff=0.3
     )
 
     if coincidencias:
-        nombre_sugerido = coincidencias[0]
-        if busqueda_input.lower() != nombre_sugerido.lower():
-            st.info(
-                f"💡 ¿Quisiste decir **'{nombre_sugerido}'**? Mostrando resultados similares."
-            )
-
-        # Filtrar el DataFrame con los nombres parecidos encontrados
         df_para_mostrar = df_para_mostrar[
             df_para_mostrar["Cliente"].isin(coincidencias)
         ]
     else:
-        # Búsqueda parcial si no hay coincidencias de difflib
         df_para_mostrar = df_para_mostrar[
             df_para_mostrar["Cliente"].str.contains(
                 busqueda_input, case=False, na=False
             )
         ]
-        if df_para_mostrar.empty:
-            st.warning("⚠️ No se encontraron clientes con ese nombre.")
 
 # Configuración del editor interactivo
 config_columnas = {
     "Cliente": st.column_config.TextColumn(
-        "Nombre del Cliente", required=True
+        "Nombre del Cliente",
+        help="Escribe el nombre. Se corregirá formato y acentos al presionar Enter.",
+        required=True,
     ),
     "Monto Prestado": st.column_config.NumberColumn(
         "Monto Prestado ($)", min_value=0.0, format="$%.2f", default=0.0
@@ -117,7 +162,13 @@ df_editado = st.data_editor(
     key="data_editor",
 )
 
-# Actualizar el estado global con los cambios realizados
+# --- CORRECCIÓN AUTOMÁTICA EN LA TABLA ---
+# Aplicar la corrección de Mayúsculas y Acentos a cada celda de la columna Cliente
+df_editado["Cliente"] = df_editado["Cliente"].apply(
+    corregir_y_formatear_nombre
+)
+
+# Actualizar el estado global con los datos corregidos
 for idx, row in df_editado.iterrows():
     st.session_state.df_clientes.loc[idx] = row
 
@@ -125,7 +176,6 @@ for idx, row in df_editado.iterrows():
 df_calculado = df_editado.copy()
 
 if not df_calculado.empty:
-    df_calculado["Cliente"] = df_calculado["Cliente"].fillna("Nuevo Cliente")
     df_calculado["Monto Prestado"] = df_calculado["Monto Prestado"].fillna(0.0)
     df_calculado["Débito"] = df_calculado["Débito"].fillna(0.0)
     df_calculado["Es Renovación"] = df_calculado["Es Renovación"].fillna(False)
@@ -174,8 +224,7 @@ if not df_calculado.empty:
     col1, col2 = st.columns(2)
     with col1:
         st.metric(
-            label="💰 Total Prestado (Filtrado)",
-            value=f"${monto_total_prestado:,.2f}",
+            label="💰 Total Prestado", value=f"${monto_total_prestado:,.2f}"
         )
     with col2:
         st.metric(

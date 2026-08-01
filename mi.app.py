@@ -6,9 +6,25 @@ st.set_page_config(
     page_title="Calculadora y Control de Cobranza", layout="wide"
 )
 
+# --- BARRA LATERAL (Sidebar) para configuraciones ---
+st.sidebar.header("⚙️ Configuración de Ganancia")
+
+# Deslizador / entrada numérica para modificar el porcentaje de ganancia
+porcentaje_comision = st.sidebar.number_input(
+    "Porcentaje de Ganancia (%)",
+    min_value=0.0,
+    max_value=100.0,
+    value=15.0,  # Valor por defecto (15%)
+    step=0.5,
+    help="Ingresa el porcentaje que gana la abuela por cada $100 prestados.",
+)
+
+# Convertir el porcentaje a decimal (ej: 15% -> 0.15)
+factor_ganancia = porcentaje_comision / 100.0
+
 st.title("👵 Calculadora y Control de Cobranza")
 st.write(
-    "Ingresa los datos del cliente, consulta tus ganancias y marca con una palomita (✔️) las semanas pagadas."
+    "Ingresa los datos del cliente y marca con una palomita (✔️) las semanas pagadas."
 )
 
 # 1. Crear las columnas de las 15 semanas
@@ -68,7 +84,6 @@ df_editado = st.data_editor(
 # 4. Fórmulas de cálculo
 FACTOR_INTERES = 1.20  # 20% de interés total
 SEMANAS_TOTALES = 15
-PORCENTAJE_GANANCIA = 0.15  # 15% por cada $100 prestados ($15 por cada $100)
 
 df_calculado = df_editado.copy()
 
@@ -87,9 +102,9 @@ df_calculado["Monto Entregado a Mano"] = (
     - df_calculado["Débito"]
 )
 
-# Ganancia de la abuela: 15% del monto prestado ($15 por cada $100)
+# Ganancia utilizando el % modificado por el usuario
 df_calculado["Ganancia Abuela"] = (
-    df_calculado["Monto Prestado"] * PORCENTAJE_GANANCIA
+    df_calculado["Monto Prestado"] * factor_ganancia
 )
 
 # Cálculo del total a cobrar y pagos semanales
@@ -109,7 +124,7 @@ df_calculado["Saldo Restante"] = (
     df_calculado["Total a Pagar"] - df_calculado["Total Cobrado"]
 )
 
-# --- 5. Métrica de Ganancia Total ---
+# --- 5. Métricas e Indicadores ---
 ganancia_total = df_calculado["Ganancia Abuela"].sum()
 monto_total_prestado = df_calculado["Monto Prestado"].sum()
 
@@ -120,7 +135,7 @@ with col1:
     )
 with col2:
     st.metric(
-        label="💵 Ganancia Total de la Abuela (15%)",
+        label=f"💵 Ganancia Total de la Abuela ({porcentaje_comision:.1f}%)",
         value=f"${ganancia_total:,.2f}",
     )
 

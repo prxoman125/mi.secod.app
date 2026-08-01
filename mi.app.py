@@ -8,35 +8,54 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# --- ESTILOS CSS PERSONALIZADOS (MODO OSCURO Y TAMAÑO DE IMÁGENES) ---
+# --- ESTILOS CSS PERSONALIZADOS (LOGO, MODO OSCURO Y TAMAÑO DE IMÁGENES) ---
 st.markdown("""
     <style>
-    /* Soporte dinámico para Modo Oscuro y Modo Claro */
     .stApp {
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
     
-    /* Encabezados adaptables a la paleta de color */
+    /* Encabezado con Logo */
+    .brand-container {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        margin-bottom: 15px;
+    }
+    .brand-logo {
+        width: 50px;
+        height: 50px;
+        background: linear-gradient(135deg, #1E3A8A 0%, #3B82F6 100%);
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 24px;
+        font-weight: 900;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+    }
     .header-title {
         font-size: 2.2rem;
         font-weight: 800;
-        margin-bottom: 2px;
+        margin: 0;
+        line-height: 1;
     }
     .header-subtitle {
         opacity: 0.8;
-        font-size: 1rem;
-        margin-bottom: 20px;
+        font-size: 0.95rem;
+        margin: 4px 0 0 0;
     }
 
-    /* Reducción global del tamaño de imágenes y avatares */
+    /* Reducción global del tamaño de avatares en tablas */
     [data-testid="stTable"] img, [data-testid="stDataEditor"] img, .stDataFrame img {
-        max-height: 38px !important;
+        max-height: 32px !important;
         width: auto !important;
         border-radius: 50%;
         object-fit: cover;
     }
 
-    /* Tarjetas de Métricas ajustadas para visión legible en modo oscuro */
+    /* Tarjetas de Métricas */
     div[data-testid="stMetric"] {
         background-color: rgba(255, 255, 255, 0.05);
         border: 1px solid rgba(128, 128, 128, 0.2);
@@ -45,19 +64,20 @@ st.markdown("""
         border-left: 4px solid #1E3A8A;
     }
 
-    /* Tarjeta INE México estilo compacto y neutro */
+    /* Credencial INE México estilo compacto */
     .ine-card {
-        width: 260px;
-        height: 150px;
+        width: 250px;
+        height: 145px;
         border: 1px solid rgba(128, 128, 128, 0.4);
         background: rgba(128, 128, 128, 0.1);
         border-radius: 8px;
         padding: 8px;
         font-family: Arial, sans-serif;
         position: relative;
+        margin-bottom: 10px;
     }
     .ine-header {
-        font-size: 8px;
+        font-size: 7.5px;
         font-weight: bold;
         text-align: center;
         border-bottom: 1px solid rgba(128, 128, 128, 0.3);
@@ -69,8 +89,8 @@ st.markdown("""
         gap: 8px;
     }
     .ine-photo {
-        width: 50px !important;
-        height: 65px !important;
+        width: 45px !important;
+        height: 60px !important;
         border-radius: 3px !important;
         border: 1px solid rgba(128, 128, 128, 0.5);
         object-fit: cover;
@@ -84,7 +104,7 @@ st.markdown("""
         bottom: 4px;
         left: 8px;
         right: 8px;
-        font-size: 7px;
+        font-size: 6.5px;
         font-family: monospace;
         letter-spacing: 1px;
         border: 1px solid rgba(128, 128, 128, 0.3);
@@ -176,9 +196,16 @@ if "df_clientes" not in st.session_state:
         },
     ])
 
-# --- ENCABEZADO CORPORATIVO ---
-st.markdown("<h1 class='header-title'>Crece & Credick</h1>", unsafe_allow_html=True)
-st.markdown("<p class='header-subtitle'>Sistema de Gestión de Crédito y Control de Cobranza - León, Guanajuato</p>", unsafe_allow_html=True)
+# --- ENCABEZADO Y LOGO CORPORATIVO CRECE & CREDIK ---
+st.markdown("""
+    <div class="brand-container">
+        <div class="brand-logo">C&C</div>
+        <div>
+            <h1 class="header-title">Crece & Credick</h1>
+            <p class="header-subtitle">Sistema de Gestión de Crédito y Control de Cobranza - León, Guanajuato</p>
+        </div>
+    </div>
+""", unsafe_allow_html=True)
 
 # --- CONTROLES EMPRESARIALES (OPERATIVO CRECE & CREDICK) ---
 with st.expander("Panel de Control Operativo - Crece & Credick", expanded=True):
@@ -224,6 +251,7 @@ with tab_captura:
     for sem in columnas_semanas:
         config_columnas_edicion[sem] = st.column_config.CheckboxColumn(sem, default=False)
 
+    # Tabla limpia en captura: sin imágenes ni enlaces
     df_editado = st.data_editor(
         df_temp,
         column_config=config_columnas_edicion,
@@ -308,7 +336,6 @@ with tab_resumen:
     st.dataframe(
         df_resumen,
         column_config={
-            # Avatar en tamaño 'small' para controlar el tamaño visual de las fotos de perfil
             "Avatar": st.column_config.ImageColumn("Perfil", width="small"),
             "Cliente": st.column_config.TextColumn("Cliente"),
             "Género": st.column_config.TextColumn("Género Detectado"),
@@ -324,19 +351,24 @@ with tab_resumen:
         hide_index=True,
     )
 
-# --- PESTAÑA FICHAS E INE ---
+# --- PESTAÑA FICHAS E INE (CORREGIDO ERROR INDEXERROR) ---
 with tab_fichas:
     st.subheader("Vista Previa de Identificación (INE México)")
     st.caption("Ejemplo visual de credenciales de elector generadas para el expediente del cliente.")
     
     if not df_calculado.empty:
-        cols_ine = st.columns(min(len(df_calculado), 4))
-        for idx, row in df_calculado.iterrows():
-            col_idx = idx % 4
-            with cols_ine[col_idx]:
-                st.markdown(f"**{row['Cliente']}**")
-                ine_html = generar_html_ine(row["Cliente"], row["Género"])
-                st.markdown(ine_html, unsafe_allow_html=True)
-                st.markdown("---")
+        columnas_por_fila = 3
+        registros = df_calculado.to_dict('records')
+        
+        # Iteración segura por bloques para evitar IndexError
+        for i in range(0, len(registros), columnas_por_fila):
+            chunk = registros[i:i + columnas_por_fila]
+            cols = st.columns(columnas_por_fila)
+            for idx, row in enumerate(chunk):
+                with cols[idx]:
+                    st.markdown(f"**{row['Cliente']}**")
+                    ine_html = generar_html_ine(row["Cliente"], row["Género"])
+                    st.markdown(ine_html, unsafe_allow_html=True)
+            st.markdown("---")
     else:
         st.info("No hay clientes registrados para mostrar credenciales.")

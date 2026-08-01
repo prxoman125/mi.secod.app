@@ -6,20 +6,18 @@ st.set_page_config(
     page_title="Calculadora y Control de Cobranza", layout="wide"
 )
 
-# --- BARRA LATERAL (Sidebar) para configuraciones ---
+# --- BARRA LATERAL (Sidebar) ---
 st.sidebar.header("⚙️ Configuración de Ganancia")
 
-# Deslizador / entrada numérica para modificar el porcentaje de ganancia
 porcentaje_comision = st.sidebar.number_input(
     "Porcentaje de Ganancia (%)",
     min_value=0.0,
     max_value=100.0,
-    value=15.0,  # Valor por defecto (15%)
+    value=15.0,
     step=0.5,
     help="Ingresa el porcentaje que gana la abuela por cada $100 prestados.",
 )
 
-# Convertir el porcentaje a decimal (ej: 15% -> 0.15)
 factor_ganancia = porcentaje_comision / 100.0
 
 st.title("👵 Calculadora y Control de Cobranza")
@@ -50,11 +48,11 @@ data = [
 
 df_inicial = pd.DataFrame(data)
 
-# Configuración del editor para la tabla interactiva
+# Configuración del editor interactivo
 config_columnas = {
     "Cliente": st.column_config.TextColumn("Nombre del Cliente"),
     "Monto Prestado": st.column_config.NumberColumn(
-        "Monto Prestado ($)", min_value=0, format="$%.2f"
+        "Monto Prestado ($)", min_value=0.0, format="$%.2f", default=0.0
     ),
     "Es Renovación": st.column_config.CheckboxColumn(
         "¿Renovación?",
@@ -62,32 +60,37 @@ config_columnas = {
         default=False,
     ),
     "Débito": st.column_config.NumberColumn(
-        "Débito / Adeudo Anterior ($)", min_value=0, format="$%.2f"
+        "Débito / Adeudo Anterior ($)", min_value=0.0, format="$%.2f", default=0.0
     ),
 }
 
-# Configuración de las casillas de verificación para las 15 semanas
 for sem in columnas_semanas:
     config_columnas[sem] = st.column_config.CheckboxColumn(
         sem, help=f"Marca si pagó la {sem}", default=False
     )
 
-# 3. Mostrar la tabla editable
+# 3. Tabla editable
 df_editado = st.data_editor(
     df_inicial,
     column_config=config_columnas,
-    disabled=["Cliente"],
     num_rows="dynamic",
     hide_index=True,
 )
 
-# 4. Fórmulas de cálculo
-FACTOR_INTERES = 1.20  # 20% de interés total
-SEMANAS_TOTALES = 15
-
+# 4. Limpieza de datos (evita errores con filas nuevas o vacías)
 df_calculado = df_editado.copy()
 
-# Descuento por renovación ($50 por cada $1,000)
+# Rellenar casillas vacías de texto o números para evitar fallas
+df_calculado["Cliente"] = df_calculado["Cliente"].fillna("Nuevo Cliente")
+df_calculado["Monto Prestado"] = df_calculado["Monto Prestado"].fillna(0.0)
+df_calculado["Débito"] = df_calculado["Débito"].fillna(0.0)
+df_calculado["Es Renovación"] = df_calculado["Es Renovación"].fillna(False)
+df_calculado[columnas_semanas] = df_calculado[columnas_semanas].fillna(False)
+
+# Fórmulas de cálculo
+FACTOR_INTERES = 1.20
+SEMANAS_TOTALES = 15
+
 df_calculado["Descuento Renovación"] = df_calculado.apply(
     lambda row: (row["Monto Prestado"] / 1000.0) * 50.0
     if row["Es Renovación"]
@@ -95,19 +98,16 @@ df_calculado["Descuento Renovación"] = df_calculado.apply(
     axis=1,
 )
 
-# Monto a entregar en mano
 df_calculado["Monto Entregado a Mano"] = (
     df_calculado["Monto Prestado"]
     - df_calculado["Descuento Renovación"]
     - df_calculado["Débito"]
 )
 
-# Ganancia utilizando el % modificado por el usuario
 df_calculado["Ganancia Abuela"] = (
     df_calculado["Monto Prestado"] * factor_ganancia
 )
 
-# Cálculo del total a cobrar y pagos semanales
 df_calculado["Total a Pagar"] = (
     df_calculado["Monto Prestado"] * FACTOR_INTERES
 )
@@ -115,7 +115,6 @@ df_calculado["Pago Semanal"] = (
     df_calculado["Total a Pagar"] / SEMANAS_TOTALES
 )
 
-# Conteo de semanas pagadas y saldos
 df_calculado["Semanas Pagadas"] = df_calculado[columnas_semanas].sum(axis=1)
 df_calculado["Total Cobrado"] = (
     df_calculado["Semanas Pagadas"] * df_calculado["Pago Semanal"]
@@ -139,7 +138,7 @@ with col2:
         value=f"${ganancia_total:,.2f}",
     )
 
-# 6. Tabla de Resumen de Saldos y Ganancias
+# 6. Tabla de Resumen de Saldos (Usando column_config seguro)
 st.subheader("📊 Control de Pagos, Saldos y Ganancias")
 
 columnas_resumen = [
@@ -156,17 +155,18 @@ columnas_resumen = [
 
 df_resumen = df_calculado[columnas_resumen]
 
+# Muestra la tabla usando la configuración segura de Streamlit
 st.dataframe(
-    df_resumen.style.format(
-        {
-            "Monto Prestado": "${:,.2f}",
-            "Ganancia Abuela": "${:,.2f}",
-            "Monto Entregado a Mano": "${:,.2f}",
-            "Total a Pagar": "${:,.2f}",
-            "Pago Semanal": "${:,.2f}",
-            "Total Cobrado": "${:,.2f}",
-            "Saldo Restante": "${:,.2f}",
-        }
-    ),
+    df_resumen,
+    column_config={
+        "Monto Prestado": st.column_config.NumberColumn("Monto Prestado", format="$%.2f"),
+        "Ganancia Abuela": st.column_config.NumberColumn("Ganancia Abuela", format="$%.2f"),
+        "Monto Entregado a Mano": st.column_config.NumberColumn("Monto Entregado a Mano", format="$%.2f"),
+        "Total a Pagar": st.column_config.NumberColumn("Total a Pagar", format="$%.2f"),
+        "Pago Semanal": st.column_config.NumberColumn("Pago Semanal", format="$%.2f"),
+        "Total Cobrado": st.column_config.NumberColumn("Total Cobrado", format="$%.2f"),
+        "Saldo Restante": st.column_config.NumberColumn("Saldo Restante", format="$%.2f"),
+    },
     use_container_width=True,
+    hide_index=True,
 )

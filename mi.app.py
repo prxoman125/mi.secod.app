@@ -13,7 +13,18 @@ st.set_page_config(
 NOMBRE_ARCHIVO_LOGO = "logo.png"
 AVATAR_HOMBRE = "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
 AVATAR_MUJER = "https://cdn-icons-png.flaticon.com/512/3135/3135789.png"
-HUELLA_DIGITAL = "https://cdn-icons-png.flaticon.com/512/2913/2913133.png"
+
+# --- HUELLA DIGITAL EN FORMATO SVG NATIVO (NO DEPENDE DE URLS EXTERNAS) ---
+SVG_HUELLA = """
+<svg width="30" height="38" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.75; color: #1E3A8A;">
+  <path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"/>
+  <path d="M14 13.12c0 2.38-.1 4.54-.33 6.88"/>
+  <path d="M10.3 8.3c1.58-.8 3.82-.8 5.4 0 1.78.9 2.3 3.02 2.3 5.7 0 2.41-.12 5.07-.4 7.5"/>
+  <path d="M8.2 10.3c.33-2.18 2.05-3.8 4.3-3.8 2.25 0 3.97 1.62 4.3 3.8"/>
+  <path d="M6.3 12.8c0-3.3 2.55-6.3 6.2-6.3 3.65 0 6.2 3 6.2 6.3 0 2.58-.13 5.48-.42 8.2"/>
+  <path d="M4.5 15.3c.08-4.3 3.3-8.3 8-8.3 4.7 0 7.92 4 8 8.3"/>
+</svg>
+"""
 
 # --- ESTILOS CSS PERSONALIZADOS ---
 st.markdown(
@@ -34,7 +45,7 @@ st.markdown(
         margin: 4px 0 0 0;
     }
 
-    /* Reducción visual de avatares */
+    /* Reducción visual de avatares en las tablas */
     [data-testid="stTable"] img, [data-testid="stDataEditor"] img, .stDataFrame img {
         max-height: 32px !important;
         width: auto !important;
@@ -50,10 +61,10 @@ st.markdown(
         border-left: 5px solid #00A887;
     }
 
-    /* Credencial INE México con Huella Digital */
+    /* Estructura de la Credencial INE */
     .ine-card {
-        width: 260px;
-        height: 155px;
+        width: 270px;
+        height: 160px;
         border: 1px solid rgba(128, 128, 128, 0.4);
         background: rgba(128, 128, 128, 0.08);
         border-radius: 8px;
@@ -61,6 +72,7 @@ st.markdown(
         font-family: Arial, sans-serif;
         position: relative;
         margin-bottom: 10px;
+        box-sizing: border-box;
     }
     .ine-header {
         font-size: 7.5px;
@@ -73,27 +85,37 @@ st.markdown(
     .ine-body {
         display: flex;
         gap: 8px;
+        align-items: flex-start;
     }
     .ine-photo {
-        width: 45px !important;
-        height: 60px !important;
+        width: 48px !important;
+        height: 62px !important;
         border-radius: 3px !important;
         border: 1px solid rgba(128, 128, 128, 0.5);
         object-fit: cover;
     }
     .ine-details {
         font-size: 8px;
-        line-height: 1.2;
+        line-height: 1.25;
         flex-grow: 1;
     }
-    .ine-fingerprint {
-        width: 28px !important;
-        height: 35px !important;
+    .ine-fingerprint-box {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 48px;
+        border: 1px dashed rgba(128, 128, 128, 0.4);
+        border-radius: 4px;
+        padding: 2px;
+        background: rgba(0, 0, 0, 0.03);
+    }
+    .ine-fingerprint-label {
+        font-size: 5px;
+        font-weight: bold;
         opacity: 0.7;
-        object-fit: contain;
-        position: absolute;
-        right: 12px;
-        bottom: 22px;
+        margin-top: 1px;
     }
     .ine-footer {
         position: absolute;
@@ -152,6 +174,7 @@ def auto_detectar_genero(nombre: str) -> str:
 def generar_html_ine(nombre: str, genero: str) -> str:
     curp_dummy = f"{nombre[:2].upper()}X900101HMCLR09"
     foto_url = AVATAR_MUJER if genero == "Mujer" else AVATAR_HOMBRE
+    
     return f"""
     <div class="ine-card">
         <div class="ine-header">
@@ -164,7 +187,10 @@ def generar_html_ine(nombre: str, genero: str) -> str:
                 <b>DOMICILIO:</b><br>LEON, GUANAJUATO<br><br>
                 <b>CURP:</b> {curp_dummy}
             </div>
-            <img src="{HUELLA_DIGITAL}" class="ine-fingerprint">
+            <div class="ine-fingerprint-box">
+                {SVG_HUELLA}
+                <span class="ine-fingerprint-label">HUELLA</span>
+            </div>
         </div>
         <div class="ine-footer">
             IDMEX1829384938<<029384920384
@@ -263,12 +289,12 @@ with tab_captura:
             df_temp["Cliente"].str.contains(filtro_buscar, case=False, na=False)
         ]
 
-    # Asignar Avatar a la izquierda para captura
+    # Asignar Foto a la izquierda
     df_temp["Foto"] = df_temp["Cliente"].apply(
         lambda n: AVATAR_MUJER if auto_detectar_genero(n) == "Mujer" else AVATAR_HOMBRE
     )
     
-    # Reordenar columnas para que "Foto" aparezca a la izquierda
+    # Reordenar columnas para tener 'Foto' al inicio
     columnas_ordenadas = ["Foto", "Cliente", "Monto Prestado", "Es Renovación", "Débito"] + columnas_semanas
     df_temp = df_temp[columnas_ordenadas]
 
@@ -315,7 +341,6 @@ with tab_captura:
         key="editor_tabla",
     )
 
-    # Eliminar columna auxiliar de foto antes de guardar en la sesión
     if "Foto" in df_editado.columns:
         df_guardar = df_editado.drop(columns=["Foto"])
     else:

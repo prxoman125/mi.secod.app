@@ -1,5 +1,4 @@
-import difflib
-import re
+import unicodedata
 import pandas as pd
 import streamlit as st
 
@@ -8,14 +7,14 @@ st.set_page_config(
     page_title="Calculadora y Control de Cobranza", layout="wide"
 )
 
-# Configuración constante de comisión (sin menú lateral)
-PORCENTAJE_COMISION = 15.0  # 15% fijo
+# Configuración constante de comisión
+PORCENTAJE_COMISION = 15.0
 FACTOR_GANANCIA = PORCENTAJE_COMISION / 100.0
 FACTOR_INTERES = 1.20
 SEMANAS_TOTALES = 15
 
-# Diccionario de reemplazos comunes para acentuación automática
-DICCIONARIO_ACENTOS = {
+# Diccionario ampliado de nombres y apellidos comunes con acento
+NOMBRES_ACENTUADOS = {
     "maria": "María",
     "jose": "José",
     "jesus": "Jesús",
@@ -23,11 +22,14 @@ DICCIONARIO_ACENTOS = {
     "ramon": "Ramón",
     "martin": "Martín",
     "raul": "Raúl",
-    "sofi": "Sofía",
     "sofia": "Sofía",
     "lucia": "Lucía",
     "veronica": "Verónica",
     "monica": "Mónica",
+    "andres": "Andrés",
+    "adrian": "Adrián",
+    "oscar": "Óscar",
+    "ruben": "Rubén",
     "perez": "Pérez",
     "gomez": "Gómez",
     "rodriguez": "Rodríguez",
@@ -37,46 +39,50 @@ DICCIONARIO_ACENTOS = {
     "gonzalez": "González",
     "sanchez": "Sánchez",
     "ramirez": "Ramírez",
-    "flores": "Flores",
     "diaz": "Díaz",
     "vazquez": "Vázquez",
     "jimenez": "Jiménez",
     "gutierrez": "Gutiérrez",
+    "alvarez": "Álvarez",
+    "suarez": "Suárez",
 }
 
 
-def corregir_y_formatear_nombre(nombre_texto):
-    """Corrige espacios, convierte a Mayúscula Inicial y aplica acentos comunes."""
-    if not isinstance(nombre_texto, str) or not nombre_texto.strip():
-        return "Nuevo Cliente"
+def auto_corregir_nombre(cadena):
+    """Limpia espacios, aplica formato de mayúsculas (Capitalize)
 
-    # 1. Quitar espacios extras
-    texto_limpio = " ".join(nombre_texto.split())
+    y corrige acentos según el diccionario.
+    """
+    if not isinstance(cadena, str) or not cadena.strip():
+        return ""
 
-    # 2. Reemplazar palabras conocidas sin acento por su versión acentuada
-    palabras = texto_limpio.split()
+    # Normalizar espacios extras
+    texto = " ".join(cadena.split())
+
+    palabras = texto.split(" ")
     palabras_corregidas = []
 
-    for palabra in palabras:
-        palabra_lower = palabra.lower()
-        if palabra_lower in DICCIONARIO_ACENTOS:
-            palabras_corregidas.append(DICCIONARIO_ACENTOS[palabra_lower])
+    for p in palabras:
+        p_lower = p.lower()
+        # Si la palabra sin acento está en nuestro diccionario, se reemplaza por la correcta
+        if p_lower in NOMBRES_ACENTUADOS:
+            palabras_corregidas.append(NOMBRES_ACENTUADOS[p_lower])
         else:
-            # Poner primera letra en mayúscula (capitalizar)
-            palabras_corregidas.append(palabra.capitalize())
+            # Si no está, asegura Mayúscula Inicial (ej: "juan" -> "Juan")
+            palabras_corregidas.append(p.capitalize())
 
     return " ".join(palabras_corregidas)
 
 
 st.title("👵 Calculadora y Control de Cobranza")
 st.write(
-    "Ingresa o busca los datos de tus clientes. Los nombres se **corregirán automáticamente** (mayúsculas y acentos)."
+    "Escribe en la tabla. Al presionar **Enter** o salir de la casilla, el nombre se **corregirá automáticamente** en su propio recuadro."
 )
 
 # 1. Crear las columnas de las 15 semanas
 columnas_semanas = [f"Semana {i}" for i in range(1, 16)]
 
-# 2. Datos iniciales de ejemplo en estado de sesión
+# 2. Inicializar la base de datos en Session State
 if "df_clientes" not in st.session_state:
     data = [
         {
@@ -99,37 +105,11 @@ if "df_clientes" not in st.session_state:
     ]
     st.session_state.df_clientes = pd.DataFrame(data)
 
-# --- BÚSQUEDA DE CLIENTES ---
-st.subheader("🔍 Buscar Cliente")
-busqueda_input = st.text_input(
-    "Filtrar por nombre:",
-    placeholder="Ej. maria perez (se corregirá automáticamente)",
-)
-
-df_para_mostrar = st.session_state.df_clientes.copy()
-
-if busqueda_input.strip():
-    lista_clientes = df_para_mostrar["Cliente"].dropna().astype(str).tolist()
-    coincidencias = difflib.get_close_matches(
-        busqueda_input, lista_clientes, n=3, cutoff=0.3
-    )
-
-    if coincidencias:
-        df_para_mostrar = df_para_mostrar[
-            df_para_mostrar["Cliente"].isin(coincidencias)
-        ]
-    else:
-        df_para_mostrar = df_para_mostrar[
-            df_para_mostrar["Cliente"].str.contains(
-                busqueda_input, case=False, na=False
-            )
-        ]
-
 # Configuración del editor interactivo
 config_columnas = {
     "Cliente": st.column_config.TextColumn(
         "Nombre del Cliente",
-        help="Escribe el nombre. Se corregirá formato y acentos al presionar Enter.",
+        help="Escribe en minúsculas o sin acento; se autocorregirá al confirmar.",
         required=True,
     ),
     "Monto Prestado": st.column_config.NumberColumn(
@@ -153,27 +133,24 @@ for sem in columnas_semanas:
         sem, help=f"Marca si pagó la {sem}", default=False
     )
 
-# 3. Tabla editable
+# 3. Mostrar Editor Interactivos
 df_editado = st.data_editor(
-    df_para_mostrar,
+    st.session_state.df_clientes,
     column_config=config_columnas,
     num_rows="dynamic",
     hide_index=True,
-    key="data_editor",
+    key="editor_tabla",
 )
 
-# --- CORRECCIÓN AUTOMÁTICA EN LA TABLA ---
-# Aplicar la corrección de Mayúsculas y Acentos a cada celda de la columna Cliente
-df_editado["Cliente"] = df_editado["Cliente"].apply(
-    corregir_y_formatear_nombre
-)
+# --- CORRECCIÓN AUTOMÁTICA DIRECTA ---
+# Se aplica la corrección a la columna 'Cliente'
+df_editado["Cliente"] = df_editado["Cliente"].apply(auto_corregir_nombre)
 
-# Actualizar el estado global con los datos corregidos
-for idx, row in df_editado.iterrows():
-    st.session_state.df_clientes.loc[idx] = row
+# Guardar los cambios directamente en la sesión
+st.session_state.df_clientes = df_editado.copy()
 
-# 4. Limpieza y Cálculos
-df_calculado = df_editado.copy()
+# 4. Limpieza y Fórmulas de cálculo
+df_calculado = st.session_state.df_clientes.copy()
 
 if not df_calculado.empty:
     df_calculado["Monto Prestado"] = df_calculado["Monto Prestado"].fillna(0.0)
@@ -217,7 +194,7 @@ if not df_calculado.empty:
         df_calculado["Total a Pagar"] - df_calculado["Total Cobrado"]
     )
 
-    # --- 5. Métricas e Indicadores ---
+    # Métricas
     ganancia_total = df_calculado["Ganancia Abuela"].sum()
     monto_total_prestado = df_calculado["Monto Prestado"].sum()
 
@@ -228,11 +205,11 @@ if not df_calculado.empty:
         )
     with col2:
         st.metric(
-            label=f"💵 Ganancia Total de la Abuela ({PORCENTAJE_COMISION:.1f}%)",
+            label=f"💵 Ganancia Total ({PORCENTAJE_COMISION:.1f}%)",
             value=f"${ganancia_total:,.2f}",
         )
 
-    # 6. Tabla de Resumen de Saldos
+    # Tabla de Resumen
     st.subheader("📊 Control de Pagos, Saldos y Ganancias")
 
     columnas_resumen = [
@@ -247,10 +224,8 @@ if not df_calculado.empty:
         "Saldo Restante",
     ]
 
-    df_resumen = df_calculado[columnas_resumen]
-
     st.dataframe(
-        df_resumen,
+        df_calculado[columnas_resumen],
         column_config={
             "Monto Prestado": st.column_config.NumberColumn(
                 "Monto Prestado", format="$%.2f"
